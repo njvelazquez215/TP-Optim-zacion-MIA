@@ -77,7 +77,7 @@ def update_rmsprop(params, x, y, step_size, aux):
 
 @jit
 def update_adam(params, x, y, step_size, aux):
-    k, beta1, beta2, sk, rk = aux
+    k, sk, rk, beta1, beta2 = aux
     k += 1
     grads  = grad(loss)(params, x, y)
     sk = beta1 * sk + (1 - beta1) * grads
@@ -86,9 +86,8 @@ def update_adam(params, x, y, step_size, aux):
     rvk = rk / (1 - beta2 ** k)
     step_size = step_size / (jnp.sqrt(rvk) + 1e-8)
     params = params - step_size * svk
-    aux = (k, beta1, beta2, sk, rk)
+    aux = (k, sk, rk, beta1, beta2)
     return params, aux
-
 
 def get_batches(x, y, bs):
     for i in range(0, len(x), bs):

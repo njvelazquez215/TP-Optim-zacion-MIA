@@ -1,0 +1,17 @@
+Optimizador: ADAM
+Schedule: fix
+Número de épocas: 10
+Fecha y horario de guardado: 2025-05-14_17-37-57
+El mínimo valor de la función pérdida (0.036638062447309494) se obtuvo con step size = 0.0118137419679454, batch size = 17 y aux = (np.float64(0.7923993554647898), np.float64(0.9752861324183292)).
+
+Rangos de los hiperparámetros:
+límite inferior,límite superior
+10,100
+0.001,0.1
+0.7,0.95
+0.9,0.9999
+
+Resultados:
+batch size,step size,aux0,aux1,loss
+17.0,0.0118137419679454,0.7923993554647898,0.9752861324183292,0.036638062
+81.0,0.06391105377540139,0.8638238178686197,0.9346874931166481,0.088562004
