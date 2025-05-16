@@ -1,0 +1,16 @@
+Optimizador: ADAM
+Schedule: Power
+Número de épocas: 2
+Fecha y horario de guardado: 2025-05-16_10-38-56
+El mínimo valor de la función pérdida (0.06294409930706024) se obtuvo  con batch size = 99, step size = 0.02, optimAux = (0.93, 0.9015111917633599) y schAux = (50000, 0.9796197449077555).
+
+Rangos de los hiperparámetros:
+límite inferior,límite superior
+10,100
+0.9,0.9999
+0.9,1
+
+Resultados:
+batch size,step size,optimAux0,optimAux1,schAux0,schAux1,loss
+51,0.02,0.93,0.9537552888271105,50000,0.9201121500011579,0.07930036
+99,0.02,0.93,0.9015111917633599,50000,0.9796197449077555,0.0629441

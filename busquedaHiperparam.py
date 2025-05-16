@@ -5,51 +5,96 @@ import matplotlib.pyplot as plt
 import csv
 from datetime import datetime
 import os
+import copy
 
 from implementacion import experimento, datainit
 from nn_functions import update_rmsprop, update_sgd, update_adam
 
-def busqueda(data, optimizador, schedule, num_epochs, aux, nParams, nMuestras, rangosParams):
+def busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams):
     '''
-    - Las entradas data, optimizador, schedule, num_epochs y aux son como las entradas de experimento().
-    - En el caso de aux, si el número de hiperparámetros a modificar son más de 2 (y por ahora debe ser el número total de hiperparámetros del optimizador), los últimos hiperparámetros son reemplazados
-    por los generados por el muestreo. Es decir, si para ADAM era aux = aux = (k, sk, rk, beta1, beta2), nParams debe ser 4 (o 2) y beta1 y beta2 serán reemplazados por los valores que genere el muestreo.
-    Por lo anterior, los elementos de aux deben ubicar a los hiperparámetros al final de la tupla.
-    - nParams es el número de hiperparámetros para los cuales se van a generar muestras para lanzar los experimentos.
-    Por ahora se supone que los hiperparámetros a utilizar siempre incluyen al batch size y al step size. Las muestras generadas para el batch size se convierten en enteros.
-    Por esto, se asume que el primer hiperparámetro a muestrear es el batch size y el segundo el step size.
-    Si se pone nParams > 2, se agregan muestras para más variables y por ahora solo quedan como números flotantes comprendidos en los rangos establecidos.
+    - Las entradas data, optimizador, schedule y num_epochs son como las entradas de experimento().
+    - optimAux y schAux son casi como las de experimento, nada más que cuando se quiere incorporar una de sus variables en el muestreo, en vez de poner
+    en un elemento de la tupla un valor numérico, debe ponerse None en su lugar. Si optimAux y/o schAux no son tuplas y son None, directamente este es el valor que se la pasa a experimento, no se muestrea.
+    - Si bs es un entero, se realiza la exploración con ese batch size; si es None, se incorpora batch size a la exploración. Las muestras generadas para el batch size se convierten en enteros.
+    - Si ss es un escalar se realiza la exploración con ese step size; si es None, se incorpora step size a la exploración.
     - nMuestras es el número de muestras a generar de dimension nParams, en total.
     - rangosParas = [[limInferior1, limSuperior1], [limInferior2, limSuperior2], ...] es una lista con los valores inferiores y superiores de los rangos en los que las muestras pueden tomar valores.
+    El orden en el que se generan las muestras son (omitir si no se incluyen): bs, ss, optimAux, schAux. Es importante esto para saber en qué orden dar los rangos.
     '''
+    
+    nParams = 0
 
-    if nParams < 2:
-        raise Exception('Todavía no se implementó.')
+    if bs is None:
+        nParams += 1
 
+    if ss is None:
+        nParams += 1
+
+    if optimAux is None:
+        optimAux = []
+    for i in range(len(optimAux)):
+        if optimAux[i] is None:
+            nParams += 1
+
+    if schAux is None:
+        schAux = []
+    for i in range(len(schAux)):
+        if schAux[i] is None:
+            nParams += 1
+    
     sampler = qmc.LatinHypercube(d=nParams)  # Generador de muestras LHS
     sample = sampler.random(n=nMuestras)    # Muestras generadas.
 
-    hparams = qmc.scale(sample, l_bounds=[r[0] for r in rangosParams],  # Se escalan las muestras a los rangos deseados.
+    sample = qmc.scale(sample, l_bounds=[r[0] for r in rangosParams],  # Se escalan las muestras a los rangos deseados.
                                     u_bounds=[r[1] for r in rangosParams])
 
-    for i in range(len(hparams)):
-        hparams[i][0] = jnp.round(hparams[i][0]).astype(int)    # Se transforman los batch sizes a enteros.
+    hparams = []
+
+    for i in range(len(sample)):
+        hparams.append([])
+        
+        j = 0   # Contador para ver qué elemento tomar de la muestra
+
+        # Batch size
+        if bs is None:
+            hparams[i].append(jnp.round(sample[i][0]).astype(int))    # Se transforman los batch sizes a enteros.
+            j += 1
+        else:
+            hparams[i].append(bs)
+
+        # Step size
+        if ss is None:
+            hparams[i].append(float(sample[i][j]))
+            j += 1
+        else:
+            hparams[i].append(ss)
+
+        # optimAux
+        optimAuxList = []
+        for k in range(len(optimAux)):
+            if optimAux[k] is None:
+                optimAuxList.append(float(sample[i][j]))
+                j += 1
+            else:
+                optimAuxList.append(optimAux[k])
+        hparams[i].append(tuple(optimAuxList))
+
+        # schAux
+        schAuxList = []
+        for k in range(len(schAux)):
+            if schAux[k] is None:
+                schAuxList.append(float(sample[i][j]))
+                j += 1
+            else:
+                schAuxList.append(schAux[k])
+        hparams[i].append(tuple(schAuxList))
+        
 
     FF = []     # Inicializo la lista de los costos
 
-    if not aux is None and nParams > 2:     # Si el optimizador necesita la variable aux, se extraen los primero elementos, que no son hiperparámetros modificados.
-        auxAux = aux[0:-(len(aux) - (nParams - 2))]
-    else: 
-        auxAux = None
-
     for hparam in tqdm(hparams):    # Se realiza el experimento por cada punto de hiperparámetros
-        bs = int(hparam[0].item())
-        step_size = float(hparam[1].item())
-
-        if not aux is None:
-            aux = auxAux + tuple(hparam[2:])    # Se arma la variable aux con los hiperparámetros, si nParams > 2
-        
-        f = experimento(data, optimizador, schedule, num_epochs, step_size, bs, aux=aux, plotFlag=False)
+        bs, ss, optimAux, schAux = hparam
+        f = experimento(data, optimizador, schedule, num_epochs, ss, bs, optimAux=optimAux, schAux=schAux, plotFlag=False)
         FF.append(f)
 
     FF = jnp.array(FF)
@@ -58,20 +103,14 @@ def busqueda(data, optimizador, schedule, num_epochs, aux, nParams, nMuestras, r
     min_idx = jnp.argmin(FF)    # Se obtiene el índice del costo mínimo obtenido.
 
     # Hiperparámetros correspondientes al mínimo costo
-    bs = hparams[min_idx][0].astype(int)
-    step_size = hparams[min_idx][1]
     
-    if not auxAux is None:
-        aux = auxAux + tuple(hparams[min_idx][2:])
-        resultado = f'El mínimo valor de la función pérdida ({FF[min_idx]}) se obtuvo con step size = {step_size}, batch size = {bs} y aux = {aux}.'
-    else:
-        resultado = f'El mínimo valor de la función pérdida ({FF[min_idx]}) se obtuvo con step size = {step_size} y batch size = {bs}.'
-    print(resultado)
+    bs, ss, optimAux, schAux = hparams[min_idx]
 
+    resultado = f'El mínimo valor de la función pérdida ({FF[min_idx]}) se obtuvo  con batch size = {bs}, step size = {ss}, optimAux = {optimAux} y schAux = {schAux}.'
+
+    print(resultado)
     # Para el registro
-    rec = hparams.tolist()
-    for i, hparam in enumerate(rec):
-        hparam.append(FF[i])
+    rec = [hparam[:2] + list(hparam[2]) + list(hparam[3]) + [FF[i]] for i, hparam in enumerate(hparams)]
 
     fecha = str(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
     descripcion = ['Optimizador: ' + optimizador, 'Schedule: ' + schedule, 'Número de épocas: ' + str(num_epochs), 
@@ -80,9 +119,11 @@ def busqueda(data, optimizador, schedule, num_epochs, aux, nParams, nMuestras, r
     headerRangos = ['límite inferior', 'límite superior']
 
     header = ['batch size', 'step size']
-    if nParams > 2:
-        for i in range(nParams-2):
-            header.append('aux'+str(i))
+    for i in range(len(optimAux)):
+        header.append('optimAux'+str(i))
+    for i in range(len(schAux)):
+        header.append('schAux'+str(i))
+    
     header.append('loss')
 
     directorio = 'Resultados/Hiperparámetros'
@@ -103,48 +144,65 @@ def busqueda(data, optimizador, schedule, num_epochs, aux, nParams, nMuestras, r
         writer.writerow(header)
         writer.writerows(rec)
 
-    return step_size, bs, aux, hparams, min_idx
+    return  bs, ss, optimAux, schAux, hparams, min_idx
 
 
 if __name__ == '__main__':
     # Importación y procesamiento de los datos.
-    data = datainit(True)
+    data = datainit(False)
 
     # Configuración general
-    schedule = 'fix'        # Cuando implementemos alguna schedule se cambiaría.
-    num_epochs = 10
+    num_epochs = 2
 
     ## SGD
     optimizador = 'SGD'
+    schedule = 'Fix'
+    
+    bs = None
+    ss = None
 
-    aux = None
+    optimAux = None     # Es None porque no se requiere, no por el muestreo (si este fuera el caso, sería una tupla con algún elemento None).
+    schAux = None       # Es None porque no se requiere, no por el muestreo (si este fuera el caso, sería una tupla con algún elemento None).
 
-    nParams = 2
     nMuestras = 2
     rangosParams = [[2, 40],        # batch size
                     [0.04, 0.06]]     # step size
     
-    step_size, bs, aux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, aux, nParams, nMuestras, rangosParams)
+    bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams)
     
-    experimento(data, optimizador, schedule, num_epochs, step_size, bs, aux, plotFlag=True)
+    experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux, schAux, plotFlag=True)
 
     ## ADAM
     optimizador = 'ADAM'
-    
-    beta1 = 0.93
-    beta2 = 0.997
+    schedule = 'Power'
 
-    aux = (beta1, beta2)
-    
-    nParams = 4
+    bs = None#30
+    ss = 0.02
+
+    beta1 = 0.93
+    beta2 = None#0.997
+
+    optimAux = (beta1, beta2)
+
+    r = 50000
+    c = None
+
+    schAux = (r, c)
+
     nMuestras = 2
+
+    # Los rangos de abajo los dejo porque mas o menos funcionaban.
+    # rangosParams = [[10, 100],      # batch size
+    #                 [0.001, 0.1],   # step size
+    #                 [0.7, 0.95],    # beta1
+    #                 [0.9, 0.9999]]  # beta2
+
     rangosParams = [[10, 100],      # batch size
-                    [0.001, 0.1],   # step size
-                    [0.7, 0.95],    # beta1
-                    [0.9, 0.9999]]  # beta2
+                    [0.9, 0.9999],  # beta2       
+                    [0.9, 1]]       # c   
     
-    step_size, bs, aux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, aux, nParams, nMuestras, rangosParams)
+    #bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams)
     
-    experimento(data, optimizador, schedule, num_epochs, step_size, bs, aux, plotFlag=True)
+    #experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux, schAux, plotFlag=True)
     
     plt.show()

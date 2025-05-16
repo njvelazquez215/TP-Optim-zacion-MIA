@@ -61,13 +61,13 @@ def loss(params, coord, target):
     return jnp.mean(jnp.square(preds - target))
 
 @jit
-def update_sgd(params, x, y, step, aux):
+def update_sgd(params, x, y, step, aux, t):
     grads  = grad(loss)(params, x, y)
     params = params - step * grads
     return params, aux
 
 @jit
-def update_rmsprop(params, x, y, step_size, aux):
+def update_rmsprop(params, x, y, step_size, aux, t):
     beta = 0.9
     grads = grad(loss)(params, x, y)
     aux = beta * aux + (1 - beta) * jnp.square(grads)
@@ -76,19 +76,29 @@ def update_rmsprop(params, x, y, step_size, aux):
     return params, aux
 
 @jit
-def update_adam(params, x, y, step_size, aux):
-    k, sk, rk, beta1, beta2 = aux
-    k += 1
+def update_adam(params, x, y, step_size, aux, t):
+    sk, rk, beta1, beta2 = aux
     grads  = grad(loss)(params, x, y)
     sk = beta1 * sk + (1 - beta1) * grads
     rk = beta2 * rk + (1 - beta2) * jnp.square(grads)
-    svk = sk / (1 - beta1 ** k)
-    rvk = rk / (1 - beta2 ** k)
+    svk = sk / (1 - beta1 ** t)
+    rvk = rk / (1 - beta2 ** t)
     step_size = step_size / (jnp.sqrt(rvk) + 1e-8)
     params = params - step_size * svk
-    aux = (k, sk, rk, beta1, beta2)
+    aux = (sk, rk, beta1, beta2)
     return params, aux
 
 def get_batches(x, y, bs):
     for i in range(0, len(x), bs):
         yield x[i:i+bs], y[i:i+bs]
+
+@jit
+def sch_exponential(step_size, schAux, t):
+    r, = schAux
+    return step_size * 10 ** (-1 / r)
+
+@jit
+def sch_power(step_size, schAux, t):
+    step_size0, r, c = schAux
+    return step_size0 * (1 + t / r) ** - c
+    

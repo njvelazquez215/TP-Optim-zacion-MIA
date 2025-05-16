@@ -1,0 +1,15 @@
+Optimizador: SGD
+Schedule: Fix
+Número de épocas: 2
+Fecha y horario de guardado: 2025-05-16_10-43-03
+El mínimo valor de la función pérdida (0.11679426580667496) se obtuvo  con batch size = 28, step size = 0.0402318060213427, optimAux = () y schAux = ().
+
+Rangos de los hiperparámetros:
+límite inferior,límite superior
+2,40
+0.04,0.06
+
+Resultados:
+batch size,step size,loss
+28,0.0402318060213427,0.116794266
+20,0.05446875757912386,0.15994361
