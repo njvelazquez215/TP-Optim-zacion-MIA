@@ -166,14 +166,14 @@ def estudioALE(ruta):
     data = {headers[j] : [datos[i,j] for i in range(len(datos[:,j]))] for j in range(len(headers))}
     df = pd.DataFrame(data)
 
-    df.replace(np.inf, np.nan, inplace=True)
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
     df.dropna(inplace=True)
     
     X = df.drop(columns='loss')
     y = df['loss']
-    df.replace([np.inf, ])
     model = RandomForestRegressor()
     model.fit(X, y)
+    print("Train R²:", model.score(X, y))
 
     wrapped_model = ModelWrapper(model)
 
@@ -187,9 +187,11 @@ def estudioALE(ruta):
 class ModelWrapper:
     def __init__(self, model):
         self.model = model
+
     def predict(self, X_input):
-        if hasattr(X_input, "values"):
-            X_input = X_input.values
+        if not hasattr(X_input, "columns"):
+            # Reconstruye un DataFrame con los nombres de columna originales
+            X_input = pd.DataFrame(X_input, columns=self.model.feature_names_in_)
         return self.model.predict(X_input)
 
 if __name__ == '__main__':
@@ -250,6 +252,6 @@ if __name__ == '__main__':
     
     #experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux, schAux, plotFlag=True)
 
-    estudioALE('Resultados\Hiperparámetros\SGD-Fix-50-2025-05-18_18-09-14.txt')
+    estudioALE('Resultados/Hiperparámetros/SGD-Fix-50-2025-05-18_18-09-14.txt')
     
     plt.show()
