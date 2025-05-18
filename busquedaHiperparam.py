@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+from jax import random
 from tqdm import tqdm
 from scipy.stats import qmc
 import matplotlib.pyplot as plt
@@ -6,9 +7,16 @@ import csv
 from datetime import datetime
 import os
 import copy
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from PyALE import ale
+import numpy as np
+
 
 from implementacion import experimento, datainit
+from graficar_resultados import leer_resultado
 from nn_functions import update_rmsprop, update_sgd, update_adam
+
 
 def busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams):
     '''
@@ -45,6 +53,13 @@ def busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, 
     sampler = qmc.LatinHypercube(d=nParams)  # Generador de muestras LHS
     sample = sampler.random(n=nMuestras)    # Muestras generadas.
 
+    # Para muestreo logarítmico del paso
+    if ss is None:
+        if bs is None:
+            rangosParams[1] = [jnp.log10(extremo) for extremo in rangosParams[1]]
+        else:
+            rangosParams[0] = [jnp.log10(extremo) for extremo in rangosParams[0]]
+
     sample = qmc.scale(sample, l_bounds=[r[0] for r in rangosParams],  # Se escalan las muestras a los rangos deseados.
                                     u_bounds=[r[1] for r in rangosParams])
 
@@ -57,14 +72,14 @@ def busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, 
 
         # Batch size
         if bs is None:
-            hparams[i].append(jnp.round(sample[i][0]).astype(int))    # Se transforman los batch sizes a enteros.
+            hparams[i].append(int(jnp.round(sample[i][0])))    # Se transforman los batch sizes a enteros.
             j += 1
         else:
             hparams[i].append(bs)
 
         # Step size
         if ss is None:
-            hparams[i].append(float(sample[i][j]))
+            hparams[i].append(float(10 ** sample[i][j]))
             j += 1
         else:
             hparams[i].append(ss)
@@ -89,7 +104,6 @@ def busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, 
                 schAuxList.append(schAux[k])
         hparams[i].append(tuple(schAuxList))
         
-
     FF = []     # Inicializo la lista de los costos
 
     for hparam in tqdm(hparams):    # Se realiza el experimento por cada punto de hiperparámetros
@@ -146,6 +160,37 @@ def busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, 
 
     return  bs, ss, optimAux, schAux, hparams, min_idx
 
+def estudioALE(ruta):
+    headers, datos = leer_resultado(ruta)
+    
+    data = {headers[j] : [datos[i,j] for i in range(len(datos[:,j]))] for j in range(len(headers))}
+    df = pd.DataFrame(data)
+
+    df.replace(np.inf, np.nan, inplace=True)
+    df.dropna(inplace=True)
+    
+    X = df.drop(columns='loss')
+    y = df['loss']
+    df.replace([np.inf, ])
+    model = RandomForestRegressor()
+    model.fit(X, y)
+
+    wrapped_model = ModelWrapper(model)
+
+    for feature in X.columns:
+        print(f'ALE para {feature}')
+        ale(X=X, model=wrapped_model, feature=[feature], include_CI=True, plot=True)
+        
+    plt.show()
+    return
+
+class ModelWrapper:
+    def __init__(self, model):
+        self.model = model
+    def predict(self, X_input):
+        if hasattr(X_input, "values"):
+            X_input = X_input.values
+        return self.model.predict(X_input)
 
 if __name__ == '__main__':
     # Importación y procesamiento de los datos.
@@ -164,13 +209,13 @@ if __name__ == '__main__':
     optimAux = None     # Es None porque no se requiere, no por el muestreo (si este fuera el caso, sería una tupla con algún elemento None).
     schAux = None       # Es None porque no se requiere, no por el muestreo (si este fuera el caso, sería una tupla con algún elemento None).
 
-    nMuestras = 2
+    nMuestras = 10
     rangosParams = [[2, 40],        # batch size
                     [0.04, 0.06]]     # step size
     
-    bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams)
+    #bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams)
     
-    experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux, schAux, plotFlag=True)
+    #experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux, schAux, plotFlag=True)
 
     ## ADAM
     optimizador = 'ADAM'
@@ -204,5 +249,7 @@ if __name__ == '__main__':
     #bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams)
     
     #experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux, schAux, plotFlag=True)
+
+    estudioALE('Resultados\Hiperparámetros\SGD-Fix-50-2025-05-18_18-09-14.txt')
     
     plt.show()
