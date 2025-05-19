@@ -18,7 +18,7 @@ from graficar_resultados import leer_resultado
 from nn_functions import update_rmsprop, update_sgd, update_adam
 
 
-def busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams):
+def busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags=None, sslogOverride=True):
     '''
     - Las entradas data, optimizador, schedule y num_epochs son como las entradas de experimento().
     - optimAux y schAux son casi como las de experimento, nada más que cuando se quiere incorporar una de sus variables en el muestreo, en vez de poner
@@ -53,15 +53,33 @@ def busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, 
     sampler = qmc.LatinHypercube(d=nParams)  # Generador de muestras LHS
     sample = sampler.random(n=nMuestras)    # Muestras generadas.
 
-    # Para muestreo logarítmico del paso
-    if ss is None:
-        if bs is None:
-            rangosParams[1] = [jnp.log10(extremo) for extremo in rangosParams[1]]
-        else:
-            rangosParams[0] = [jnp.log10(extremo) for extremo in rangosParams[0]]
+    # Para muestreos logarítmicos
+    if logscaleFlags is None:
+        logscaleFlags = [False for i in nParams]
 
+    if sslogOverride:
+            if bs is None:
+                logscaleFlags[1] = True
+            else:
+                logscaleFlags[0] = True
+    
+    if len(logscaleFlags) != nParams:
+        raise(Exception('Número de booleanos para los flag de escalas logarítmicas no coincide con el número de parámetros a muestrear.'))
+                
+    if any(logscaleFlags):
+        for j in range(len(logscaleFlags)):
+            if logscaleFlags[j]:
+                rangosParams[j] = [jnp.log10(extremo) for extremo in rangosParams[j]]
+
+    # Obtengo la muestra
     sample = qmc.scale(sample, l_bounds=[r[0] for r in rangosParams],  # Se escalan las muestras a los rangos deseados.
                                     u_bounds=[r[1] for r in rangosParams])
+    
+    # Para muestreos logaritmicos
+    if any(logscaleFlags):
+        for j in range(len(logscaleFlags)):
+            if logscaleFlags[j]:
+                sample[:,j] = 10 ** sample[:,j]
 
     hparams = []
 
@@ -79,7 +97,7 @@ def busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, 
 
         # Step size
         if ss is None:
-            hparams[i].append(float(10 ** sample[i][j]))
+            hparams[i].append(float(sample[i][j]))
             j += 1
         else:
             hparams[i].append(ss)
@@ -160,8 +178,13 @@ def busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, 
 
     return  bs, ss, optimAux, schAux, hparams, min_idx
 
-def estudioALE(ruta):
-    headers, datos = leer_resultado(ruta)
+def estudioALE(rutas):
+    if isinstance(rutas, str):
+        headers, datos = leer_resultado(rutas)
+    elif isinstance(rutas, list):
+        headers, datos = leer_resultado(rutas[0])
+        for ruta in rutas[1:]:
+            np.vstack((datos, leer_resultado(ruta)[1]))
     
     data = {headers[j] : [datos[i,j] for i in range(len(datos[:,j]))] for j in range(len(headers))}
     df = pd.DataFrame(data)
