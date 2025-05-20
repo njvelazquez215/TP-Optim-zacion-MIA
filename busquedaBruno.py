@@ -255,5 +255,6 @@ optimAux = (0.9, 0.99)
 schAux = (2e4, 0.75)       
 
 epochsHistoHess = [0, 19]
-experimento(data, optimizador, schedule, num_epochs, ss, bs, optimAux, schAux, True, epochsHistoHess=epochsHistoHess)
+lmdb = None
+experimento(data, optimizador, schedule, num_epochs, ss, bs, optimAux, schAux, True, epochsHistoHess=epochsHistoHess, lmbd=lmdb)
 plt.show()

@@ -56,29 +56,42 @@ def predict(params, coord):
 batched_predict = vmap(predict, in_axes=(None, 0))
 
 @jit
-def loss(params, coord, target):
+def loss(params, coord, target, lmbd):
     preds = batched_predict(params, coord)
-    return jnp.mean(jnp.square(preds - target))
+    loss_data = jnp.mean(jnp.square(preds - target))
+    if not lmbd is None:
+        weights = unpack_params(params)
+        l2_penalty = sum(jnp.sum(w**2) for w, _ in weights)
+        loss_data += lmbd * l2_penalty
+    return loss_data
+
+# @jit
+# def loss_l2(params, coord, target, lmbd):
+#     preds = batched_predict(params, coord)
+#     loss_data = jnp.mean(jnp.square(preds - target))
+#     weights = unpack_params(params)
+#     l2_penalty = sum(jnp.sum(w**2) for w, _ in weights)
+#     return loss_data + lmbd * l2_penalty
 
 @jit
-def update_sgd(params, x, y, step, aux, t):
-    grads  = grad(loss)(params, x, y)
+def update_sgd(params, x, y, step, aux, t, lmbd):
+    grads  = grad(loss)(params, x, y, lmbd)
     params = params - step * grads
     return params, aux
 
 @jit
-def update_rmsprop(params, x, y, step_size, aux, t):
+def update_rmsprop(params, x, y, step_size, aux, t, lmbd):
     beta = 0.9
-    grads = grad(loss)(params, x, y)
+    grads = grad(loss)(params, x, y, lmbd)
     aux = beta * aux + (1 - beta) * jnp.square(grads)
     step_size = step_size / (jnp.sqrt(aux) + 1e-8)
     params = params - step_size * grads 
     return params, aux
 
 @jit
-def update_adam(params, x, y, step_size, aux, t):
+def update_adam(params, x, y, step_size, aux, t, lmbd):
     sk, rk, beta1, beta2 = aux
-    grads  = grad(loss)(params, x, y)
+    grads  = grad(loss)(params, x, y, lmbd)
     sk = beta1 * sk + (1 - beta1) * grads
     rk = beta2 * rk + (1 - beta2) * jnp.square(grads)
     svk = sk / (1 - beta1 ** t)
@@ -88,7 +101,7 @@ def update_adam(params, x, y, step_size, aux, t):
     aux = (sk, rk, beta1, beta2)
     return params, aux
 
-def update_pswa(params, x, y, step_size, aux, t):
+def update_pswa(params, x, y, step_size, aux, t, lmbd):
     update, optimAux, schAux = aux
 
     a1, a2, cCLR, cSWA, nSWA, paramsSWA = schAux

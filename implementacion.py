@@ -11,7 +11,7 @@ from nn_functions import get_batches, loss, batched_predict
 from nn_functions import update_rmsprop, update_sgd, update_adam, update_pswa
 from nn_functions import sch_exponential, sch_power, sch_CLR
 from nn_functions import batched_activaciones
-def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux=None, schAux=None, plotFlag=True, PSWAAux=None, epochsHistoHess=None):
+def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux=None, schAux=None, plotFlag=True, PSWAAux=None, epochsHistoHess=None, lmbd=None):
     '''
     - optimizador y schedule son strings con los nombres del optimizador y schedule a utilizar.
     Por ahora están: RMSProp, SGD y ADAM (optimizadores); y Fix, Exponential y Power (schedule).
@@ -37,10 +37,9 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
     params = init_network_params(layer_sizes, random.key(0))
     params = pack_params(params)
 
-
     # initialize gradients
     xi, yi = next(get_batches(xx, ff, bs))
-    grads = grad(loss)(params, xi, yi)
+    grads = grad(loss)(params, xi, yi, lmbd)
     
     if optimizador == 'RMSProp':
         update = update_rmsprop
@@ -73,7 +72,7 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
 
         if epochsHistoHess:
             if epoch == epochsHistoHess[0]:
-                plotActivaciones(params, xi, yi, epoch)
+                plotActivaciones(params, xi, yi, epoch, lmbd)
                 del epochsHistoHess[0]
 
         # Update on each batch
@@ -81,9 +80,9 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
         for xi, yi in get_batches(xx[idxs], ff[idxs], bs):
             if not scheduleFun is None:
                 step_size = scheduleFun(step_size, schAux, t)
-            params, optimAux = update(params, xi, yi, step_size, optimAux, t)
+            params, optimAux = update(params, xi, yi, step_size, optimAux, t, lmbd)
             t += 1
-        train_loss = loss(params, xx, ff)
+        train_loss = loss(params, xx, ff, lmbd)
         log_train.append(train_loss)
 
         if jnp.isnan(train_loss):
@@ -125,7 +124,7 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
 
     return train_loss
 
-def plotActivaciones(params, x, y, epoch):
+def plotActivaciones(params, x, y, epoch, lmbd):
     # Histograma de activaciones
     activaciones = batched_activaciones(params, x)
     fig = plt.figure()
@@ -138,7 +137,7 @@ def plotActivaciones(params, x, y, epoch):
 
     # Histograma del espectro del Hessiano
     H = hessian(loss)
-    H = H(params, x, y)
+    H = H(params, x, y, lmbd)
     eig= jnp.linalg.eigvalsh(H)
     ax2 = fig.add_subplot(2, 1, 2)
     ax2.stem(eig)
