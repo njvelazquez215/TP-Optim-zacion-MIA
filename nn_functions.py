@@ -72,7 +72,7 @@ def update_rmsprop(params, x, y, step_size, aux, t):
     grads = grad(loss)(params, x, y)
     aux = beta * aux + (1 - beta) * jnp.square(grads)
     step_size = step_size / (jnp.sqrt(aux) + 1e-8)
-    params = params - step_size * grads
+    params = params - step_size * grads 
     return params, aux
 
 @jit
@@ -88,6 +88,35 @@ def update_adam(params, x, y, step_size, aux, t):
     aux = (sk, rk, beta1, beta2)
     return params, aux
 
+def update_pswa(params, x, y, step_size, aux, t):
+    update, optimAux, schAux = aux
+
+    a1, a2, cCLR, cSWA, nSWA, paramsSWA = schAux
+
+    # CLR
+    k = 1 / cCLR * (((t - 1) % cCLR) + 1)
+    step_size = (1 - k) * a1 + k * a2
+    if k == 1:  # Cuando el CLR llega al menor paso se realiza un promedio.
+        print('Se promedia')
+        paramsSWA = (paramsSWA * nSWA+ params)/(nSWA + 1)
+        nSWA += 1
+        if nSWA == cSWA:    # Cuando ya se promediaron cSWA pesos (un ciclo), se fuerzan los pesos promediados en el entrenamiento,
+                            # se reinician el conteo de pesos promedios (nSWA) y los pesos promediados (paramsSWA).
+            print('SWA')
+            params = paramsSWA
+            nSWA = 0
+            paramsSWA = 0
+
+    schAux = a1, a2, cCLR, cSWA, nSWA, paramsSWA
+
+    # Optimizador
+    params, optimAux = update(params, x, y, step_size, optimAux, t)
+
+    aux = (update, optimAux, schAux)
+
+    return params, aux
+
+
 def get_batches(x, y, bs):
     for i in range(0, len(x), bs):
         yield x[i:i+bs], y[i:i+bs]
@@ -101,4 +130,11 @@ def sch_exponential(step_size, schAux, t):
 def sch_power(step_size, schAux, t):
     step_size0, r, c = schAux
     return step_size0 * (1 + t / r) ** - c
+
+@jit
+def sch_CLR(step_size, schAux, t):
+    a1, a2, c = schAux
+    k = 1 / c * (((t - 1) % c) + 1)
+    return (1 - k) * a1 + k * a2
+
     

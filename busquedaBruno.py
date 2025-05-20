@@ -113,7 +113,130 @@ rangosParams = [[2, 50],        # batch size
                 [0.6, 1]]       # c
 logscaleFlags = [False, True, True, False]
 
-bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags)
+#bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags)
+#estudioALE('Resultados\Hiperparámetros\SGD-Power-50-2025-05-19_11-44-24.txt')
 
+##########################
+# Intervalos modificados, r no log.
+optimizador = 'SGD'
+schedule = 'Power'
 
+bs = None
+ss = None
+
+optimAux = None     # Es None porque no se requiere, no por el muestreo (si este fuera el caso, sería una tupla con algún elemento None).
+schAux = (None, None)       # Es None porque no se requiere, no por el muestreo (si este fuera el caso, sería una tupla con algún elemento None).
+
+nMuestras = 200
+rangosParams = [[1, 10],        # batch size
+                [0.04, 0.1],      # step size
+                [3e4, 3e6],    # r
+                [0.6, 1]]       # c
+logscaleFlags = [False, True, False, False]
+
+#bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags)
+#estudioALE('Resultados\Hiperparámetros\SGD-Power-50-2025-05-19_13-49-25.txt')
+
+##########################
+# Intervalos modificados. ss y r fijos.
+optimizador = 'SGD'
+schedule = 'Power'
+
+bs = None
+ss = 0.05
+
+optimAux = None     # Es None porque no se requiere, no por el muestreo (si este fuera el caso, sería una tupla con algún elemento None).
+schAux = (2e6, None)       # Es None porque no se requiere, no por el muestreo (si este fuera el caso, sería una tupla con algún elemento None).
+
+nMuestras = 100
+rangosParams = [[1, 20],        # batch size
+                [0.6, 0.8]]       # c
+logscaleFlags = [False, False]
+
+#bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags)
+#estudioALE('Resultados\Hiperparámetros\SGD-Power-50-2025-05-19_15-20-46.txt')
+
+#########################################
+#ADAM
+#########################################
+##########################
+optimizador = 'ADAM'
+schedule = 'Power'
+
+bs = None
+ss = None
+
+optimAux = (0.9, 0.999)
+schAux = (None, None)       
+
+nMuestras = 200
+rangosParams = [[1, 100],        # batch size
+                [0.001, 0.1],   # step size
+                [3e4, 3e6],     # r
+                [0.6, 1]]       # c
+logscaleFlags = [False, True, True, False]
+
+#bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags)
+#axs = estudioALE('Resultados\Hiperparámetros\ADAM-Power-50-2025-05-19_18-23-53.txt', logscaleFlags)
+
+##########################
+# Intervalos modificados.
+optimizador = 'ADAM'
+schedule = 'Power'
+
+bs = None
+ss = None
+
+optimAux = (0.9, 0.999)
+schAux = (None, None)       
+
+nMuestras = 200
+rangosParams = [[1, 200],        # batch size
+                [0.001, 0.05],   # step size
+                [1e2, 1e5],     # r
+                [0.6, 1]]       # c
+logscaleFlags = [False, True, True, False]
+
+#bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags)
+#axs = estudioALE('Resultados\Hiperparámetros\ADAM-Power-50-2025-05-19_21-59-15.txt', logscaleFlags)
+
+##########################
+# Intervalos modificados. bs y c fijos
+optimizador = 'ADAM'
+schedule = 'Power'
+
+bs = 120
+ss = None
+
+optimAux = (0.9, 0.999)
+schAux = (None, 0.75)       
+
+nMuestras = 200
+rangosParams = [[0.005, 0.1],   # step size
+                [1e4, 5e5]]     # r
+
+logscaleFlags = [True, True]
+#bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags)
+#axs = estudioALE('Resultados\Hiperparámetros\ADAM-Power-50-2025-05-19_22-58-05.txt', logscaleFlags)
+
+##########################
+# Intervalos modificados. Mas epochs, beta1, beta2 y r
+num_epochs = 500
+optimizador = 'ADAM'
+schedule = 'Power'
+
+bs = 120
+ss = 0.03
+
+optimAux = (None, None)
+schAux = (None, 0.75)       
+
+nMuestras = 200
+rangosParams = [[0.6, 0.95],    # beta 1
+                [0.9, 0.9999],  # beta 2
+                [1e4, 5e5]]     # r
+
+logscaleFlags = [False, False, True]
+#bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags)
+axs = estudioALE('Resultados\Hiperparámetros\ADAM-Power-500-2025-05-20_06-00-10.txt', logscaleFlags)
 plt.show()

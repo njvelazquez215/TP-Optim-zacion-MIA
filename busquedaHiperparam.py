@@ -178,7 +178,7 @@ def busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, 
 
     return  bs, ss, optimAux, schAux, hparams, min_idx
 
-def estudioALE(rutas):
+def estudioALE(rutas, logscaleFlags=None):
     if isinstance(rutas, str):
         headers, datos = leer_resultado(rutas)
     elif isinstance(rutas, list):
@@ -199,12 +199,17 @@ def estudioALE(rutas):
     print("Train R²:", model.score(X, y))
 
     wrapped_model = ModelWrapper(model)
-
+    i = 0
     for feature in X.columns:
-        print(f'ALE para {feature}')
-        ale(X=X, model=wrapped_model, feature=[feature], include_CI=True, plot=True)
-        
-    plt.show()
+        if X[feature].nunique() > 1:
+            print(f'ALE para {feature}')
+            ale(X=X, model=wrapped_model, feature=[feature], include_CI=True, plot=True)
+            if logscaleFlags:
+                if logscaleFlags[i]:
+                    plt.xscale('log')
+            i += 1
+        else:
+            print(f'Se omite {feature} porque tiene un único valor: {X[feature].iloc[0]}')
     return
 
 class ModelWrapper:

@@ -8,10 +8,10 @@ import matplotlib.pyplot as plt
 
 from nn_functions import init_network_params, pack_params, layer_sizes
 from nn_functions import get_batches, loss, batched_predict
-from nn_functions import update_rmsprop, update_sgd, update_adam
-from nn_functions import sch_exponential, sch_power
+from nn_functions import update_rmsprop, update_sgd, update_adam, update_pswa
+from nn_functions import sch_exponential, sch_power, sch_CLR
 
-def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux=None, schAux=None, plotFlag=True):
+def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux=None, schAux=None, plotFlag=True, PSWAAux=None):
     '''
     - optimizador y schedule son strings con los nombres del optimizador y schedule a utilizar.
     Por ahora están: RMSProp, SGD y ADAM (optimizadores); y Fix, Exponential y Power (schedule).
@@ -26,7 +26,10 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
     Fix no necesita
     Exponential requiere que sea: (r)
     Power requiere que sea: (r, c)
+    CLR requiere que sea: (a1, a2_a1, c) donde a1 es el valor de LR más alto del ciclo, a2_a1 es la relacion de a2 con a1 y c es el número de iteraciones que conlleva cada ciclo.
     - plotFlag: si es True, se grafica.
+    PSWAAux: (cSWA, e1SWA) donde cSWA es el número de promedios que se realizan para realizar una actualización de params con el promedio (se realiza un promedio al finalizar una epoch),
+    y e1SWA es el epoch en el que se realiza el primer promedio.
     '''
     xx, ff, nx, ny = data
 
@@ -46,7 +49,7 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
     elif optimizador == 'ADAM':
         update = update_adam
         optimAux = (0, 0) + optimAux   # se agrega sk, rk, que son el número de iteración y los valores iniciales de sk y rk, que son nulos.
-        
+    
     if schedule == 'Fix':
         scheduleFun = None
     elif schedule == 'Exponential':
@@ -54,9 +57,17 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
     elif schedule == 'Power':
         scheduleFun = sch_power
         schAux = (step_size,) + schAux
+    elif schedule == 'CLR':
+        scheduleFun = sch_CLR
+
+    if PSWAAux:
+        cSWA, e1SWA = PSWAAux
+        nSWA = None
+        paramsSWA = 0
 
     t = 1
     log_train = []
+    log_min = None
     for epoch in range(num_epochs):
         # Update on each batch
         idxs = random.permutation(random.key(0), xx.shape[0])
@@ -64,12 +75,36 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
             if not scheduleFun is None:
                 step_size = scheduleFun(step_size, schAux, t)
             params, optimAux = update(params, xi, yi, step_size, optimAux, t)
-            t += 1    
+            t += 1
         train_loss = loss(params, xx, ff)
         log_train.append(train_loss)
+
         if jnp.isnan(train_loss):
             break
+
+        if log_min is None:
+            log_min = (train_loss, params)
+        else:
+            if train_loss < log_min[0]:
+                log_min = (train_loss, params)
+        
+        # PSWA
+        if PSWAAux:
+            if nSWA is None:
+                if (epoch + 1) % e1SWA == 0:
+                    nSWA = 0
+            if not nSWA is None:
+                paramsSWA = (paramsSWA * nSWA+ params)/(nSWA + 1)
+                nSWA += 1
+                if nSWA % cSWA == 0:
+                    print('SWA')
+                    params = paramsSWA
+                    nSWA = 0
+                    paramsSWA = 0
+
         #print(f"Epoch {epoch}, Loss: {train_loss}")
+    train_loss, params = log_min
+    log_train.append(train_loss)
     # Plot loss function
     if plotFlag:
         titulo = optimizador + ' con schedule ' + schedule
@@ -117,7 +152,7 @@ if __name__=='__main__':
     data = datainit(True)
 
     # Experimentos.
-    num_epochs = 100
+    num_epochs = 10
 
     ## RMSProp
     optimizador = 'RMSProp'
@@ -132,15 +167,15 @@ if __name__=='__main__':
     bs = 33
     
     schedule = 'Fix'
-    experimento(data, optimizador, schedule, num_epochs, step_size, bs, plotFlag=True)
+    #experimento(data, optimizador, schedule, num_epochs, step_size, bs, plotFlag=True)
 
     schedule = 'Exponential'
     schAux = (100000,)
-    experimento(data, optimizador, schedule, num_epochs, step_size, bs, schAux=schAux, plotFlag=True)
+    #experimento(data, optimizador, schedule, num_epochs, step_size, bs, schAux=schAux, plotFlag=True)
     
     schedule = 'Power'
     schAux = (50000, 1)
-    experimento(data, optimizador, schedule, num_epochs, step_size, bs, schAux=schAux, plotFlag=True)
+    #experimento(data, optimizador, schedule, num_epochs, step_size, bs, schAux=schAux, plotFlag=True)
 
     ## ADAM
     optimizador = 'ADAM'
