@@ -184,7 +184,7 @@ def estudioALE(rutas, logscaleFlags=None):
     elif isinstance(rutas, list):
         headers, datos = leer_resultado(rutas[0])
         for ruta in rutas[1:]:
-            np.vstack((datos, leer_resultado(ruta)[1]))
+            datos = np.vstack((datos, leer_resultado(ruta)[1]))
     
     data = {headers[j] : [datos[i,j] for i in range(len(datos[:,j]))] for j in range(len(headers))}
     df = pd.DataFrame(data)
