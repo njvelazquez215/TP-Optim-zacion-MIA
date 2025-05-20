@@ -137,4 +137,16 @@ def sch_CLR(step_size, schAux, t):
     k = 1 / c * (((t - 1) % c) + 1)
     return (1 - k) * a1 + k * a2
 
-    
+def activaciones(params, coord):
+    params = unpack_params(params)
+    hidden = coord
+    activaciones = []
+    for w, b in params[:-1]:
+        outputs = jnp.dot(w, hidden) + b
+        hidden = nn.tanh(outputs)
+        activaciones.append(hidden)
+    # final_w, final_b = params[-1]
+    # output = jnp.dot(final_w, hidden) + final_b
+    return activaciones
+
+batched_activaciones = vmap(activaciones, in_axes=(None, 0))

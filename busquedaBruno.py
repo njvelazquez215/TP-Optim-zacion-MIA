@@ -201,6 +201,9 @@ logscaleFlags = [False, True, True, False]
 #axs = estudioALE('Resultados\Hiperparámetros\ADAM-Power-50-2025-05-19_21-59-15.txt', logscaleFlags)
 
 ##########################
+# Junto los ale de los resultados anteriores.
+#axs = estudioALE(['Resultados\Hiperparámetros\ADAM-Power-50-2025-05-19_18-23-53.txt', 'Resultados\Hiperparámetros\ADAM-Power-50-2025-05-19_21-59-15.txt'], logscaleFlags)
+##########################
 # Intervalos modificados. bs y c fijos
 optimizador = 'ADAM'
 schedule = 'Power'
@@ -238,5 +241,19 @@ rangosParams = [[0.6, 0.95],    # beta 1
 
 logscaleFlags = [False, False, True]
 #bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags)
-axs = estudioALE('Resultados\Hiperparámetros\ADAM-Power-500-2025-05-20_06-00-10.txt', logscaleFlags)
+#axs = estudioALE('Resultados\Hiperparámetros\ADAM-Power-500-2025-05-20_06-00-10.txt', logscaleFlags)
+
+##########################
+num_epochs = 20
+optimizador = 'ADAM'
+schedule = 'Power'
+
+bs = 120
+ss = 0.03
+
+optimAux = (0.9, 0.99)
+schAux = (2e4, 0.75)       
+
+epochsHistoHess = [0, 19]
+experimento(data, optimizador, schedule, num_epochs, ss, bs, optimAux, schAux, True, epochsHistoHess=epochsHistoHess)
 plt.show()

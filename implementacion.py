@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from jax import grad, jit, vmap
+from jax import grad, jit, vmap, hessian
 from jax import random
 from jax import nn
 from jax import debug
@@ -10,8 +10,8 @@ from nn_functions import init_network_params, pack_params, layer_sizes
 from nn_functions import get_batches, loss, batched_predict
 from nn_functions import update_rmsprop, update_sgd, update_adam, update_pswa
 from nn_functions import sch_exponential, sch_power, sch_CLR
-
-def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux=None, schAux=None, plotFlag=True, PSWAAux=None):
+from nn_functions import batched_activaciones
+def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux=None, schAux=None, plotFlag=True, PSWAAux=None, epochsHistoHess=None):
     '''
     - optimizador y schedule son strings con los nombres del optimizador y schedule a utilizar.
     Por ahora están: RMSProp, SGD y ADAM (optimizadores); y Fix, Exponential y Power (schedule).
@@ -36,6 +36,7 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
     # Parameters
     params = init_network_params(layer_sizes, random.key(0))
     params = pack_params(params)
+
 
     # initialize gradients
     xi, yi = next(get_batches(xx, ff, bs))
@@ -69,6 +70,12 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
     log_train = []
     log_min = None
     for epoch in range(num_epochs):
+
+        if epochsHistoHess:
+            if epoch == epochsHistoHess[0]:
+                plotActivaciones(params, xi, yi, epoch)
+                del epochsHistoHess[0]
+
         # Update on each batch
         idxs = random.permutation(random.key(0), xx.shape[0])
         for xi, yi in get_batches(xx[idxs], ff[idxs], bs):
@@ -101,8 +108,8 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
                     params = paramsSWA
                     nSWA = 0
                     paramsSWA = 0
-
-        #print(f"Epoch {epoch}, Loss: {train_loss}")
+            
+        print(f"Epoch {epoch}, Loss: {train_loss}")
     train_loss, params = log_min
     log_train.append(train_loss)
     # Plot loss function
@@ -118,6 +125,29 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
 
     return train_loss
 
+def plotActivaciones(params, x, y, epoch):
+    # Histograma de activaciones
+    activaciones = batched_activaciones(params, x)
+    fig = plt.figure()
+    ax1 = fig.add_subplot(2, 1, 1)
+    for i, activacion in enumerate(activaciones):
+        flat = jnp.ravel(activacion)
+        ax1.hist(flat, bins=50, alpha=0.6, label=f'Capa {i}')
+        ax1.legend()
+    ax1.set_title('Histograma de activaciones')
+
+    # Histograma del espectro del Hessiano
+    H = hessian(loss)
+    H = H(params, x, y)
+    eig= jnp.linalg.eigvalsh(H)
+    ax2 = fig.add_subplot(2, 1, 2)
+    ax2.stem(eig)
+    ax2.set_xlabel('Autovalor')
+    ax2.set_ylabel('Frecuencia')
+    ax2.set_title('Espectro de la hessiana')
+    fig.suptitle(f'Época {epoch}')
+
+    fig.suptitle('')
 def datainit(plotFlag=True):
     # Load data
     field = jnp.load('field.npy')
