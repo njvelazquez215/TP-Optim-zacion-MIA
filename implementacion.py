@@ -3,15 +3,16 @@ from jax import grad, jit, vmap, hessian
 from jax import random
 from jax import nn
 from jax import debug
+import numpy as np
 
 import matplotlib.pyplot as plt
 
-from nn_functions import init_network_params, pack_params, layer_sizes
+from nn_functions import init_network_params, pack_params, layer_sizes, unpack_params
 from nn_functions import get_batches, loss, batched_predict
 from nn_functions import update_rmsprop, update_sgd, update_adam, update_pswa
 from nn_functions import sch_exponential, sch_power, sch_CLR
 from nn_functions import batched_activaciones
-def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux=None, schAux=None, plotFlag=True, PSWAAux=None, epochsHistoHess=None, lmbd=None):
+def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux=None, schAux=None, plotFlag=True, PSWAAux=None, epochsHistoHess=None, lmbd=None, epochFourier=None):
     '''
     - optimizador y schedule son strings con los nombres del optimizador y schedule a utilizar.
     Por ahora están: RMSProp, SGD y ADAM (optimizadores); y Fix, Exponential y Power (schedule).
@@ -31,7 +32,9 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
     PSWAAux: (cSWA, e1SWA) donde cSWA es el número de promedios que se realizan para realizar una actualización de params con el promedio (se realiza un promedio al finalizar una epoch),
     y e1SWA es el epoch en el que se realiza el primer promedio.
     '''
-    xx, ff, nx, ny = data
+    xx, ff, nx, ny, auxDataMod = data
+    if auxDataMod:
+        u, fieldModMean, fieldModStd = auxDataMod
 
     # Parameters
     params = init_network_params(layer_sizes, random.key(0))
@@ -69,11 +72,14 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
     log_train = []
     log_min = None
     for epoch in range(num_epochs):
-
         if epochsHistoHess:
             if epoch == epochsHistoHess[0]:
-                plotActivaciones(params, xi, yi, epoch, lmbd)
+                plotActivacionesHess(params, xi, yi, epoch, lmbd)
                 del epochsHistoHess[0]
+        if plotFourier:
+            if epoch == epochFourier[0]:
+                plotFourier(ff, params, xx, nx, ny, epoch)
+                del epochFourier[0]
 
         # Update on each batch
         idxs = random.permutation(random.key(0), xx.shape[0])
@@ -111,6 +117,24 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
         print(f"Epoch {epoch}, Loss: {train_loss}")
     train_loss, params = log_min
     log_train.append(train_loss)
+
+    if auxDataMod:
+        # preds = batched_predict(params, xx).reshape((nx, ny))
+        # preds = preds * fieldModStd + fieldModMean + u
+        # preds = preds.reshape(-1, 1)
+        # target = ff.reshape((nx,ny)) * fieldModStd + fieldModMean + u
+        # target = target.reshape(-1, 1)
+        # loss_data = jnp.mean(jnp.square(preds - target))
+        # if not lmbd is None:
+        #     weights = unpack_params(params)
+        #     l2_penalty = sum(jnp.sum(w**2) for w, _ in weights)
+        #     loss_data += lmbd * l2_penalty
+        # print(f'La pérdida equivalente si no se hubieran preprocesado los datos es: {loss_data}')
+       
+        # Lo de abajo es equivalente a todo lo anterior!
+        print(f'La pérdida equivalente si no se hubieran preprocesado los datos es: {train_loss * fieldModStd ** 2}')
+        
+
     # Plot loss function
     if plotFlag:
         titulo = optimizador + ' con schedule ' + schedule
@@ -118,13 +142,59 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
         plt.semilogy(log_train)
         plt.title(titulo)
 
+        im = batched_predict(params, xx).reshape((nx, ny))
+        if auxDataMod:
+            im = im * fieldModStd + fieldModMean + u
         plt.figure()
-        plt.imshow(batched_predict(params, xx).reshape((nx, ny)).T, origin='lower', cmap='jet')
+        plt.imshow(im.T, origin='lower', cmap='jet')
         plt.title(titulo)
 
     return train_loss
 
-def plotActivaciones(params, x, y, epoch, lmbd):
+def plotFourier(ff, params, xx, nx, ny, epoch):
+    ff = ff.reshape(nx, ny)
+    predict = batched_predict(params, xx).reshape(nx, ny)
+
+    idx = ny // 2
+
+    ff = ff[:,idx]
+    predict = predict[:,idx]
+    
+    xx = jnp.linspace(-1, 1, nx)
+
+    fig = plt.figure()
+    ax1 = fig.add_subplot(121)
+    ax1.set_title('Corte longitudinal medio de los datos y el ajuste')
+    ax2 = fig.add_subplot(122)
+    ax2.set_title('Espectro de amplitud del corte longitudinal medio')
+
+    ax1.plot(xx, ff, label='Campo original', color='b')
+    ax1.plot(xx, predict, label='Ajuste de NN', color='r')
+    
+    ax1.set_xlabel('x')
+    ax1.set_ylabel('u normalizada')
+    
+    ax1.legend()
+
+    ff = jnp.fft.fft(ff)
+    ff = jnp.abs(ff) / nx
+
+    predict = jnp.fft.fft(predict)
+    predict = jnp.abs(predict) / nx
+
+    frecuencias = jnp.fft.fftfreq(nx)[: nx // 2]
+
+    ff = ff[: nx // 2]
+    predict = predict[: nx // 2]
+
+    ax2.vlines(frecuencias, ymin=0, ymax=ff, color='b', label='Campo original')
+    ax2.vlines(frecuencias, ymin=0, ymax=predict, color='r', label='Ajuste de NN', alpha=0.7)
+
+    ax2.legend()
+
+    fig.suptitle(f'Época {epoch}')
+
+def plotActivacionesHess(params, x, y, epoch, lmbd):
     # Histograma de activaciones
     activaciones = batched_activaciones(params, x)
     fig = plt.figure()
@@ -140,14 +210,15 @@ def plotActivaciones(params, x, y, epoch, lmbd):
     H = H(params, x, y, lmbd)
     eig= jnp.linalg.eigvalsh(H)
     ax2 = fig.add_subplot(2, 1, 2)
-    ax2.stem(eig)
+    ax2.plot(eig)
     ax2.set_xlabel('Autovalor')
     ax2.set_ylabel('Frecuencia')
     ax2.set_title('Espectro de la hessiana')
     fig.suptitle(f'Época {epoch}')
 
-    fig.suptitle('')
-def datainit(plotFlag=True):
+    
+    
+def datainit(plotFlag=True, modFlag=False):
     # Load data
     field = jnp.load('field.npy')
     field = field - field.mean()
@@ -158,23 +229,98 @@ def datainit(plotFlag=True):
     yy = jnp.linspace(-1, 1, ny)
 
     xx, yy = jnp.meshgrid(xx, yy, indexing='ij')
-    xx = jnp.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], axis=1)
-    ff = field.reshape(-1, 1)
-    print(f'Hay {len(ff)} datos')
-    data = (xx, ff, nx, ny)
+
+    if modFlag:
+        u = jnp.mean(field, axis=0)
+
+        fieldMod = field - u[None,:]
+        fieldModMean = fieldMod.mean()
+        fieldMod = fieldMod - fieldModMean
+        fieldModStd = fieldMod.std()
+        fieldMod = fieldMod / fieldModStd
+
+        auxDataMod = (u[None,:], fieldModMean, fieldModStd)
+    else:
+        auxDataMod = None
     
     if plotFlag:
-        # Grafico de la imagen objetivo
-        plt.figure()
-        plt.imshow(ff.reshape((nx, ny)).T, origin='lower', cmap='jet')
-        
-        # Lo de abajo es el grafico de la media de las velocidades. Capaz después se puede probar de hacer algo.
-        # u = [jnp.mean(field[:,j]) for j in range(ny)]
-    
-        # plt.figure()
-        # plt.plot(yy, u)
+        if modFlag:
+            xx_np = np.array(xx)
+            yy_np = np.array(yy)
+            field_np = np.array(field)
+            u_np = np.array(u)
+            fieldMod_np = np.array(fieldMod)
+            fig = plt.figure()
 
+            ax = fig.add_subplot(131)
+            ax.plot(yy_np[0,:], u_np)
+            ax.set_title('Distribución de velocidades medias')
+
+            ax = fig.add_subplot(132, projection='3d')
+            ax.plot_surface(xx_np, yy_np, field_np)
+            ax.set_title('Datos originales')
+            
+            ax=fig.add_subplot(133, projection='3d')
+            ax.plot_surface(xx_np, yy_np, fieldMod_np)
+            ax.set_title('Datos procesados')
+        
+            plt.figure()
+            plt.imshow(field.T, origin='lower', cmap='jet')
+    
+    xx = jnp.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], axis=1)
+    
+    if modFlag:
+        field = fieldMod
+
+    ff = field.reshape(-1, 1)
+    print(f'Hay {len(ff)} datos')
+
+    data = (xx, ff, nx, ny, auxDataMod)
     return data
+
+# def datainitMod(plotFlag=True):
+#     field = jnp.load('field.npy')
+#     field = field - field.mean()
+#     field = field / field.std()
+#     field = jnp.array(field, dtype=jnp.float32)
+#     nx, ny = field.shape
+#     xx = jnp.linspace(-1, 1, nx)
+#     yy = jnp.linspace(-1, 1, ny)
+#     xx, yy = jnp.meshgrid(xx, yy, indexing='ij')
+
+#     u = jnp.mean(field, axis=0)
+
+#     fieldMod = field - u[None,:]
+#     fieldModMean = fieldMod.mean()
+#     fieldMod = fieldMod - fieldModMean
+#     fieldModStd = fieldMod.std()
+#     fieldMod = fieldMod / fieldModStd
+
+#     auxDataMod = (u[None,:], fieldModMean, fieldModStd)
+
+#     if plotFlag:
+#         xx_np = np.array(xx)
+#         yy_np = np.array(yy)
+#         field_np = np.array(field)
+#         u_np = np.array(u)
+#         fieldMod_np = np.array(fieldMod)
+#         fig = plt.figure()
+
+#         ax = fig.add_subplot(131)
+#         ax.plot(yy_np[0,:], u_np)
+
+#         ax = fig.add_subplot(132, projection='3d')
+#         ax.plot_surface(xx_np, yy_np, field_np)
+        
+#         ax=fig.add_subplot(133, projection='3d')
+#         ax.plot_surface(xx_np, yy_np, fieldMod_np)
+    
+#     xx = jnp.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], axis=1)
+#     ff = fieldMod.reshape(-1, 1)
+#     print(f'Hay {len(ff)} datos')
+#     data = (xx, ff, nx, ny)
+#     return data, auxDataMod
+    
 
 if __name__=='__main__':
     # Importación y procesamiento de los datos.

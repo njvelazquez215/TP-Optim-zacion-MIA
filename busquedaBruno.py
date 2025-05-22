@@ -244,7 +244,7 @@ logscaleFlags = [False, False, True]
 #axs = estudioALE('Resultados\Hiperparámetros\ADAM-Power-500-2025-05-20_06-00-10.txt', logscaleFlags)
 
 ##########################
-num_epochs = 20
+num_epochs = 6
 optimizador = 'ADAM'
 schedule = 'Power'
 
@@ -254,7 +254,7 @@ ss = 0.03
 optimAux = (0.9, 0.99)
 schAux = (2e4, 0.75)       
 
-epochsHistoHess = [0, 19]
-lmdb = None
+epochsHistoHess = [0, 1, 5]
+lmdb = None#1e-5
 experimento(data, optimizador, schedule, num_epochs, ss, bs, optimAux, schAux, True, epochsHistoHess=epochsHistoHess, lmbd=lmdb)
 plt.show()
