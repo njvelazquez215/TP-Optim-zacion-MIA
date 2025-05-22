@@ -9,10 +9,10 @@ import matplotlib.pyplot as plt
 
 from nn_functions import init_network_params, pack_params, layer_sizes, unpack_params
 from nn_functions import get_batches, loss, batched_predict
-from nn_functions import update_rmsprop, update_sgd, update_adam, update_pswa
+from nn_functions import update_rmsprop, update_sgd, update_adam
 from nn_functions import sch_exponential, sch_power, sch_CLR
 from nn_functions import batched_activaciones
-def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux=None, schAux=None, plotFlag=True, PSWAAux=None, epochsHistoHess=None, lmbd=None, epochFourier=None):
+def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux=None, schAux=None, plotFlag=True, PSWAAux=None, epochsHistoHess=None, lmbd=None, epochFourier=None, lmbd_grad=None):
     '''
     - optimizador y schedule son strings con los nombres del optimizador y schedule a utilizar.
     Por ahora están: RMSProp, SGD y ADAM (optimizadores); y Fix, Exponential y Power (schedule).
@@ -32,7 +32,7 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
     PSWAAux: (cSWA, e1SWA) donde cSWA es el número de promedios que se realizan para realizar una actualización de params con el promedio (se realiza un promedio al finalizar una epoch),
     y e1SWA es el epoch en el que se realiza el primer promedio.
     '''
-    xx, ff, nx, ny, auxDataMod = data
+    xx, ff, nx, ny, auxDataMod, grad_ff = data
     if auxDataMod:
         u, fieldModMean, fieldModStd = auxDataMod
 
@@ -41,8 +41,8 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
     params = pack_params(params)
 
     # initialize gradients
-    xi, yi = next(get_batches(xx, ff, bs))
-    grads = grad(loss)(params, xi, yi, lmbd)
+    xi, yi, gradi = next(get_batches(xx, ff, grad_ff, bs))
+    grads = grad(loss)(params, xi, yi, gradi, lmbd, lmbd_grad)
     
     if optimizador == 'RMSProp':
         update = update_rmsprop
@@ -83,12 +83,15 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
 
         # Update on each batch
         idxs = random.permutation(random.key(0), xx.shape[0])
-        for xi, yi in get_batches(xx[idxs], ff[idxs], bs):
+        for xi, yi, gradi in get_batches(xx[idxs], ff[idxs], grad_ff[idxs], bs):
             if not scheduleFun is None:
                 step_size = scheduleFun(step_size, schAux, t)
-            params, optimAux = update(params, xi, yi, step_size, optimAux, t, lmbd)
+            params, optimAux = update(params, xi, yi, gradi, step_size, optimAux, t, lmbd, lmbd_grad)
             t += 1
-        train_loss = loss(params, xx, ff, lmbd)
+
+        train_loss = loss(params, xx, ff, grad_ff, lmbd=None, lmbd_grad=None)
+        if auxDataMod:
+            train_loss = train_loss * fieldModStd ** 2
         log_train.append(train_loss)
 
         if jnp.isnan(train_loss):
@@ -118,7 +121,7 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
     train_loss, params = log_min
     log_train.append(train_loss)
 
-    if auxDataMod:
+    #if auxDataMod:
         # preds = batched_predict(params, xx).reshape((nx, ny))
         # preds = preds * fieldModStd + fieldModMean + u
         # preds = preds.reshape(-1, 1)
@@ -132,7 +135,7 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
         # print(f'La pérdida equivalente si no se hubieran preprocesado los datos es: {loss_data}')
        
         # Lo de abajo es equivalente a todo lo anterior!
-        print(f'La pérdida equivalente si no se hubieran preprocesado los datos es: {train_loss * fieldModStd ** 2}')
+        #print(f'La pérdida equivalente si no se hubieran preprocesado los datos es: {train_loss * fieldModStd ** 2}')
         
 
     # Plot loss function
@@ -272,10 +275,17 @@ def datainit(plotFlag=True, modFlag=False):
     if modFlag:
         field = fieldMod
 
+    df_dx, df_dy = np.gradient(field, 2 / (nx - 1), 2 / (ny - 1))
+    df_dx = jnp.array(df_dx).flatten()
+    df_dy = jnp.array(df_dy).flatten()
+
+    grad_ff = jnp.stack([df_dx, df_dy], axis=-1)
+
     ff = field.reshape(-1, 1)
+
     print(f'Hay {len(ff)} datos')
 
-    data = (xx, ff, nx, ny, auxDataMod)
+    data = (xx, ff, nx, ny, auxDataMod, grad_ff)
     return data
 
 # def datainitMod(plotFlag=True):

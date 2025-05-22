@@ -41,7 +41,7 @@ def init_network_params(sizes, key):
     keys = random.split(key, len(sizes))
     return [random_layer_params(m, n, k) for m, n, k in zip(sizes[:-1], sizes[1:], keys)]
 
-@jit
+#@jit
 def predict(params, coord):
     params = unpack_params(params)
     hidden = coord
@@ -56,13 +56,26 @@ def predict(params, coord):
 batched_predict = vmap(predict, in_axes=(None, 0))
 
 @jit
-def loss(params, coord, target, lmbd):
+def scalar_predict(params, coord):
+    return predict(params, coord)[0]
+
+@jit
+def grad_predict(params, coord):
+    return grad(scalar_predict, argnums=1)(params, coord)
+
+batched_grad_predict = vmap(grad_predict, in_axes=(None, 0))
+
+@jit
+def loss(params, coord, target, gradi, lmbd, lmbd_grad):
     preds = batched_predict(params, coord)
     loss_data = jnp.mean(jnp.square(preds - target))
     if not lmbd is None:
         weights = unpack_params(params)
         l2_penalty = sum(jnp.sum(w**2) for w, _ in weights)
         loss_data += lmbd * l2_penalty
+    if not lmbd_grad is None:
+        grad_preds = batched_grad_predict(params, coord)
+        loss_data += lmbd_grad * jnp.mean(jnp.square(grad_preds - gradi))
     return loss_data
 
 # @jit
@@ -72,26 +85,25 @@ def loss(params, coord, target, lmbd):
 #     weights = unpack_params(params)
 #     l2_penalty = sum(jnp.sum(w**2) for w, _ in weights)
 #     return loss_data + lmbd * l2_penalty
-
 @jit
-def update_sgd(params, x, y, step, aux, t, lmbd):
-    grads  = grad(loss)(params, x, y, lmbd)
-    params = params - step * grads
+def update_sgd(params, x, y, gradi, step_size, aux, t, lmbd, lmbd_grad):
+    grads  = grad(loss)(params, x, y, gradi, lmbd, lmbd_grad)
+    params = params - step_size * grads
     return params, aux
 
 @jit
-def update_rmsprop(params, x, y, step_size, aux, t, lmbd):
+def update_rmsprop(params, x, y, gradi, step_size, aux, t, lmbd, lmbd_grad):
     beta = 0.9
-    grads = grad(loss)(params, x, y, lmbd)
+    grads = grad(loss)(params, x, y, gradi, lmbd, lmbd_grad)
     aux = beta * aux + (1 - beta) * jnp.square(grads)
     step_size = step_size / (jnp.sqrt(aux) + 1e-8)
     params = params - step_size * grads 
     return params, aux
 
 @jit
-def update_adam(params, x, y, step_size, aux, t, lmbd):
+def update_adam(params, x, y, gradi, step_size, aux, t, lmbd, lmbd_grad):
     sk, rk, beta1, beta2 = aux
-    grads  = grad(loss)(params, x, y, lmbd)
+    grads  = grad(loss)(params, x, y, gradi, lmbd, lmbd_grad)
     sk = beta1 * sk + (1 - beta1) * grads
     rk = beta2 * rk + (1 - beta2) * jnp.square(grads)
     svk = sk / (1 - beta1 ** t)
@@ -101,38 +113,38 @@ def update_adam(params, x, y, step_size, aux, t, lmbd):
     aux = (sk, rk, beta1, beta2)
     return params, aux
 
-def update_pswa(params, x, y, step_size, aux, t, lmbd):
-    update, optimAux, schAux = aux
+# def update_pswa(params, x, y, gradi, step_size, aux, t, lmbd, lmbd_grad):
+#     update, optimAux, schAux = aux
 
-    a1, a2, cCLR, cSWA, nSWA, paramsSWA = schAux
+#     a1, a2, cCLR, cSWA, nSWA, paramsSWA = schAux
 
-    # CLR
-    k = 1 / cCLR * (((t - 1) % cCLR) + 1)
-    step_size = (1 - k) * a1 + k * a2
-    if k == 1:  # Cuando el CLR llega al menor paso se realiza un promedio.
-        print('Se promedia')
-        paramsSWA = (paramsSWA * nSWA+ params)/(nSWA + 1)
-        nSWA += 1
-        if nSWA == cSWA:    # Cuando ya se promediaron cSWA pesos (un ciclo), se fuerzan los pesos promediados en el entrenamiento,
-                            # se reinician el conteo de pesos promedios (nSWA) y los pesos promediados (paramsSWA).
-            print('SWA')
-            params = paramsSWA
-            nSWA = 0
-            paramsSWA = 0
+#     # CLR
+#     k = 1 / cCLR * (((t - 1) % cCLR) + 1)
+#     step_size = (1 - k) * a1 + k * a2
+#     if k == 1:  # Cuando el CLR llega al menor paso se realiza un promedio.
+#         print('Se promedia')
+#         paramsSWA = (paramsSWA * nSWA+ params)/(nSWA + 1)
+#         nSWA += 1
+#         if nSWA == cSWA:    # Cuando ya se promediaron cSWA pesos (un ciclo), se fuerzan los pesos promediados en el entrenamiento,
+#                             # se reinician el conteo de pesos promedios (nSWA) y los pesos promediados (paramsSWA).
+#             print('SWA')
+#             params = paramsSWA
+#             nSWA = 0
+#             paramsSWA = 0
 
-    schAux = a1, a2, cCLR, cSWA, nSWA, paramsSWA
+#     schAux = a1, a2, cCLR, cSWA, nSWA, paramsSWA
 
-    # Optimizador
-    params, optimAux = update(params, x, y, step_size, optimAux, t)
+#     # Optimizador
+#     params, optimAux = update(params, x, y, step_size, optimAux, t)
 
-    aux = (update, optimAux, schAux)
+#     aux = (update, optimAux, schAux)
 
-    return params, aux
+#     return params, aux
 
 
-def get_batches(x, y, bs):
+def get_batches(x, y, grad_ff,  bs):
     for i in range(0, len(x), bs):
-        yield x[i:i+bs], y[i:i+bs]
+        yield x[i:i+bs], y[i:i+bs], grad_ff[i:i+bs, :]
 
 @jit
 def sch_exponential(step_size, schAux, t):
