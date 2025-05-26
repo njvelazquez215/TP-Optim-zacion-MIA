@@ -72,14 +72,10 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
     log_train = []
     log_min = None
     for epoch in range(num_epochs):
-        if epochsHistoHess:
-            if epoch == epochsHistoHess[0]:
-                plotActivacionesHess(params, xi, yi, epoch, lmbd)
-                del epochsHistoHess[0]
-        if plotFourier:
-            if epoch == epochFourier[0]:
-                plotFourier(ff, params, xx, nx, ny, epoch)
-                del epochFourier[0]
+        if epochsHistoHess and epoch in epochsHistoHess:
+            plotActivacionesHess(params, xi, yi, gradi, epoch, lmbd, lmbd_grad)
+        if epochFourier and epoch in epochFourier:
+            plotFourier(ff, params, xx, nx, ny, epoch)
 
         # Update on each batch
         idxs = random.permutation(random.key(0), xx.shape[0])
@@ -197,23 +193,44 @@ def plotFourier(ff, params, xx, nx, ny, epoch):
 
     fig.suptitle(f'Época {epoch}')
 
-def plotActivacionesHess(params, x, y, epoch, lmbd):
+def plotActivacionesHess(params, xi, yi, gradi, epoch, lmbd, lmbd_grad):
+    nBins = 20
     # Histograma de activaciones
-    activaciones = batched_activaciones(params, x)
+    activaciones = batched_activaciones(params, xi)
     fig = plt.figure()
     ax1 = fig.add_subplot(2, 1, 1)
     for i, activacion in enumerate(activaciones):
         flat = jnp.ravel(activacion)
-        ax1.hist(flat, bins=50, alpha=0.6, label=f'Capa {i}')
+        ax1.hist(flat, bins=nBins, alpha=0.6, label=f'Capa {i}')
         ax1.legend()
     ax1.set_title('Histograma de activaciones')
 
     # Histograma del espectro del Hessiano
+
     H = hessian(loss)
-    H = H(params, x, y, lmbd)
+    H = H(params, xi, yi, gradi, lmbd, lmbd_grad)
     eig= jnp.linalg.eigvalsh(H)
+
+    eigCeros = eig[eig==0]
+    eigPos = eig[eig > 0]
+    eigNeg = abs(eig[eig < 0])
+
+    binsPos = np.logspace(np.log10(eigPos.min()), np.log10(eigPos.max()), nBins // 2)
+    binsNeg = np.logspace(np.log10(eigNeg.min()), np.log10(eigNeg.max()), nBins // 2)
+    binsNeg = - binsNeg[::-1]
+
+    print(binsPos[0])
+    print(binsPos[-1])
+    print(binsNeg[-1])
+    print(binsNeg[0])
+
+    bins = np.concatenate([binsNeg, [0], binsPos])
+
     ax2 = fig.add_subplot(2, 1, 2)
-    ax2.plot(eig)
+
+    ax2.hist(eig, bins=bins, edgecolor='k')
+    ax2.set_xscale('symlog', linthresh=1e-12)
+
     ax2.set_xlabel('Autovalor')
     ax2.set_ylabel('Frecuencia')
     ax2.set_title('Espectro de la hessiana')
