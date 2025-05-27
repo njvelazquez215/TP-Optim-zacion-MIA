@@ -211,18 +211,12 @@ def plotActivacionesHess(params, xi, yi, gradi, epoch, lmbd, lmbd_grad):
     H = H(params, xi, yi, gradi, lmbd, lmbd_grad)
     eig= jnp.linalg.eigvalsh(H)
 
-    eigCeros = eig[eig==0]
     eigPos = eig[eig > 0]
     eigNeg = abs(eig[eig < 0])
 
     binsPos = np.logspace(np.log10(eigPos.min()), np.log10(eigPos.max()), nBins // 2)
     binsNeg = np.logspace(np.log10(eigNeg.min()), np.log10(eigNeg.max()), nBins // 2)
     binsNeg = - binsNeg[::-1]
-
-    print(binsPos[0])
-    print(binsPos[-1])
-    print(binsNeg[-1])
-    print(binsNeg[0])
 
     bins = np.concatenate([binsNeg, [0], binsPos])
 
