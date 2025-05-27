@@ -284,8 +284,11 @@ def datainit(plotFlag=True, modFlag=False):
             ax.plot_surface(xx_np, yy_np, fieldMod_np)
             ax.set_title('Datos procesados')
         
-            plt.figure()
-            plt.imshow(field.T, origin='lower', cmap='jet')
+        plt.figure()
+        plt.imshow(field.T, origin='lower', cmap='jet')
+        plt.xlabel('x')
+        plt.ylabel('y')
+        plt.title('Imágen objetivo')
     
     xx = jnp.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], axis=1)
     
@@ -300,7 +303,7 @@ def datainit(plotFlag=True, modFlag=False):
 
     ff = field.reshape(-1, 1)
 
-    print(f'Hay {len(ff)} datos')
+    print(f'nx = {nx}, ny = {ny}, por lo que hay {len(ff)} datos')
 
     data = (xx, ff, nx, ny, auxDataMod, grad_ff)
     return data
