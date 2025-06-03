@@ -256,5 +256,59 @@ schAux = (2e4, 0.75)
 
 epochsHistoHess = [0, 1, 5]
 lmdb = None#1e-5
-experimento(data, optimizador, schedule, num_epochs, ss, bs, optimAux, schAux, True, epochsHistoHess=epochsHistoHess, lmbd=lmdb)
+#experimento(data, optimizador, schedule, num_epochs, ss, bs, optimAux, schAux, True, epochsHistoHess=epochsHistoHess, lmbd=lmdb)
+
+
+##########################
+# Performance
+nMuestras = 200
+num_epochs = 50
+optimizador = 'ADAM'
+schedule = 'Performance'
+
+bs = None
+ss = None
+
+optimAux = (0.9, 0.999)
+schAux = (None, None)
+
+rangosParams = [[10, 200],        # batch size
+                [0.001, 0.05],   # step size
+                [1, 4],          # schAux1
+                [0.01, 1]        # schAux2
+                ]
+logscaleFlags = [False, True, True, False]
+#bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags)
+
+bs = 60
+ss = 0.003
+
+optimAux = (None, None)
+schAux = (1.05, 0.25)
+
+rangosParams = [[0.4, 0.95],    # beta 1
+                [0.9, 0.9999]]  # beta 2
+
+logscaleFlags = [False, False]
+#bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags)
+
+############################
+optimizador = 'SGD'
+schedule = 'Performance'
+
+bs = None
+ss = None
+
+optimAux = None     # Es None porque no se requiere, no por el muestreo (si este fuera el caso, sería una tupla con algún elemento None).
+schAux = (None, None)       
+
+nMuestras = 200
+rangosParams = [[1, 100],        # batch size
+                [0.001, 0.05],   # step size
+                [1, 4],          # schAux1
+                [0.01, 1]]        # schAux2
+                
+logscaleFlags = [False, True, False, True]
+
+bs, step_size, optimAux, schAux, hparams, min_idx = busqueda(data, optimizador, schedule, num_epochs, bs, ss, optimAux, schAux, nMuestras, rangosParams, logscaleFlags)
 plt.show()

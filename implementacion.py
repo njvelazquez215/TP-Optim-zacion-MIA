@@ -7,12 +7,14 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
+from datetime import datetime
 from nn_functions import init_network_params, pack_params, layer_sizes, unpack_params
 from nn_functions import get_batches, loss, batched_predict
 from nn_functions import update_rmsprop, update_sgd, update_adam
 from nn_functions import sch_exponential, sch_power, sch_CLR
 from nn_functions import batched_activaciones
-def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux=None, schAux=None, plotFlag=True, PSWAAux=None, epochsHistoHess=None, lmbd=None, epochFourier=None, lmbd_grad=None):
+
+def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux=None, schAux=None, plotFlag=True, PSWAAux=None, epochsHistoHess=None, lmbd=None, epochFourier=None, lmbd_grad=None, printFlag=False, guardarLog=False):
     '''
     - optimizador y schedule son strings con los nombres del optimizador y schedule a utilizar.
     Por ahora están: RMSProp, SGD y ADAM (optimizadores); y Fix, Exponential y Power (schedule).
@@ -62,6 +64,12 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
         schAux = (step_size,) + schAux
     elif schedule == 'CLR':
         scheduleFun = sch_CLR
+    elif schedule == 'Performance':
+        scheduleFun = None
+        if schAux[0] < 1:
+            raise ValueError('El primer elemento de schAux debe ser mayor o igual a 1 para la schedule Performance.')
+        if schAux[1] > 1:
+            raise ValueError('El segundo elemento de schAux debe ser menor o igual a 1 para la schedule Performance.')
 
     if PSWAAux:
         cSWA, e1SWA = PSWAAux
@@ -86,6 +94,17 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
             t += 1
 
         train_loss = loss(params, xx, ff, grad_ff, lmbd=None, lmbd_grad=None)
+
+        if schedule == 'Performance':
+            if epoch == 0:
+                train_loss_old = train_loss
+            else:
+                if train_loss < train_loss_old:
+                    step_size *= schAux[0]
+                else:
+                    step_size *= schAux[1]
+                train_loss_old = train_loss
+
         if auxDataMod:
             train_loss = train_loss * fieldModStd ** 2
         log_train.append(train_loss)
@@ -112,8 +131,8 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
                     params = paramsSWA
                     nSWA = 0
                     paramsSWA = 0
-            
-        print(f"Epoch {epoch}, Loss: {train_loss}")
+        if printFlag:
+            print(f"Epoch {epoch}, Loss: {train_loss}")
     train_loss, params = log_min
     log_train.append(train_loss)
 
@@ -136,7 +155,18 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
 
     # Plot loss function
     if plotFlag:
-        titulo = optimizador + ' con schedule ' + schedule
+        partes = [optimizador, schedule]
+
+        if lmbd is not None and lmbd != 0:
+            partes.append("L2")
+        elif lmbd_grad is not None and lmbd_grad != 0:
+            partes.append("grad")
+
+        if auxDataMod is not None:
+            partes.append("con preprocesamiento")
+
+        titulo = " ".join(partes)
+
         plt.figure()
         plt.semilogy(log_train)
         plt.title(titulo)
@@ -147,8 +177,61 @@ def experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux
         plt.figure()
         plt.imshow(im.T, origin='lower', cmap='jet')
         plt.title(titulo)
+    if printFlag: 
+        print(f'El valor mínimo de la pérdida es: {train_loss}')
+
+    if guardarLog:
+        guardar_log_train(log_train, optimizador, schedule, lmbd, lmbd_grad, auxDataMod)
 
     return train_loss
+
+def guardar_log_train(log_train, optimizador, schedule, lmbd, lmbd_grad, auxDataMod):
+    carpeta="Resultados/log_train"
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+    if lmbd is not None or lmbd == 0:
+        reg_suffix = "L2"
+    elif lmbd_grad is not None or lmbd_grad == 0:
+        reg_suffix = "grad"
+    else:
+        reg_suffix = "None"
+
+    pre_suffix = "pre" if auxDataMod is not None else "None"
+
+    filename = f"{optimizador}-{schedule}-{reg_suffix}-{pre_suffix}-{timestamp}.txt"
+    filepath = carpeta + '/' + filename
+
+    # Guardar log en el archivo
+    with open(filepath, 'w') as f:
+        for loss in log_train:
+            f.write(f"{loss}\n")
+
+def graficar_logs(lista_archivos):
+    fig, ax = plt.subplots()
+
+    for file in lista_archivos:
+        with open(file, 'r') as f:
+            log_train = [float(line.strip()) for line in f.readlines()]
+
+        filename = file.split('/')[-1].split('\\')[-1].replace('.txt', '')
+        partes = filename.split('-')
+        optim = partes[0]
+        schedule = partes[1]
+        reg = partes[2]
+        pre = partes[3]
+        if reg == 'None':
+            reg = ''
+        if pre == 'None':
+            pre = ''
+        else:
+            pre = 'con preprocesamiento'
+        label = f"{optim} {schedule} {reg} {pre}"
+
+        ax.semilogy(log_train, label=label)
+
+    ax.set_xlabel("Época")
+    ax.set_ylabel("Loss")
+    ax.legend()
 
 def plotFourier(ff, params, xx, nx, ny, epoch):
     ff = ff.reshape(nx, ny)

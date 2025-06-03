@@ -203,10 +203,15 @@ def estudioALE(rutas, logscaleFlags=None):
     for feature in X.columns:
         if X[feature].nunique() > 1:
             print(f'ALE para {feature}')
-            ale(X=X, model=wrapped_model, feature=[feature], include_CI=True, plot=True)
+            tipo = 'discrete' if feature == 'batch size' else 'continuous'
+            fig, ax = plt.subplots()
+            ale(X=X, model=wrapped_model, feature=[feature], include_CI=True, plot=True, feature_type=tipo, fig=fig, ax=ax)
             if logscaleFlags:
                 if logscaleFlags[i]:
-                    plt.xscale('log')
+                    ax.set_xscale('log')   
+            if feature == 'batch size':
+                ax.tick_params(axis='x', rotation=90)
+                fig.tight_layout()
             i += 1
         else:
             print(f'Se omite {feature} porque tiene un único valor: {X[feature].iloc[0]}')

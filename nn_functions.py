@@ -41,7 +41,7 @@ def init_network_params(sizes, key):
     keys = random.split(key, len(sizes))
     return [random_layer_params(m, n, k) for m, n, k in zip(sizes[:-1], sizes[1:], keys)]
 
-#@jit
+@jit
 def predict(params, coord):
     params = unpack_params(params)
     hidden = coord
@@ -161,7 +161,7 @@ def sch_CLR(step_size, schAux, t):
     a1, a2, c = schAux
     k = 1 / c * (((t - 1) % c) + 1)
     return (1 - k) * a1 + k * a2
-
+    
 def activaciones(params, coord):
     params = unpack_params(params)
     hidden = coord
