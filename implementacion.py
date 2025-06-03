@@ -269,9 +269,14 @@ def plotFourier(ff, params, xx, nx, ny, epoch):
     ff = ff[: nx // 2]
     predict = predict[: nx // 2]
 
-    ax2.vlines(frecuencias, ymin=0, ymax=ff, color='b', label='Campo original')
-    ax2.vlines(frecuencias, ymin=0, ymax=predict, color='r', label='Ajuste de NN', alpha=0.7)
-
+    ax2.scatter(frecuencias, ff, color='b', label='Campo original', s=10)
+    ax2.scatter(frecuencias, predict, color='r', label='Ajuste de NN', s=10)
+    # ax2.vlines(frecuencias, ymin=1e-10, ymax=ff, color='b', label='Campo original')
+    # ax2.vlines(frecuencias, ymin=1e-10, ymax=predict, color='r', label='Ajuste de NN', alpha=0.7)
+    
+    ax2.set_xscale('log')
+    ax2.set_yscale('log')
+    ax2.grid(True)
     ax2.legend()
 
     fig.suptitle(f'Época {epoch}')

@@ -130,10 +130,19 @@ losses=[]
 
 
 # Comparación preprocesado sin y con regularización supervisada con el gradiente
-epochFourier = [1, 10, 100, 500, 999]
-lmbd_grad = None
-experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux, schAux, lmbd_grad=lmbd_grad, printFlag=True, plotFlag=True, epochFourier=epochFourier, guardarLog=True)
+num_epochs = 1000
 lmbd_grad = 0.00025
-experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux, schAux, lmbd_grad=lmbd_grad, printFlag=True, plotFlag=True, epochFourier=epochFourier, guardarLog=True)
-#graficar_logs(['Resultados\log_train\ADAM-Power-None-pre-2025-06-02_20-56-00.txt'])
+#experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux, schAux, lmbd_grad=lmbd_grad, printFlag=True, plotFlag=True, guardarLog=True)
+#graficar_logs(['Resultados\log_train\ADAM-Power-None-None-2025-06-02_20-20-47.txt','Resultados\log_train\ADAM-Power-None-pre-2025-06-02_20-56-00.txt','Resultados\log_train\ADAM-Power-grad-pre-2025-06-03_08-44-59.txt'])
+
+# Fourier. Comparacion con gradiente, pero datos con y sin preprocesar
+num_epochs = 4000
+epochFourier = [1, 10, 100, 500, 1000, 3999]
+epochHistoHess = [3999]
+experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux, schAux, lmbd_grad=lmbd_grad, printFlag=True, plotFlag=True, epochFourier=epochFourier, guardarLog=True, epochsHistoHess=epochHistoHess)
+
+data = datainit(plotFlag=False, modFlag=False)
+#experimento(data, optimizador, schedule, num_epochs, step_size, bs, optimAux, schAux, lmbd_grad=lmbd_grad, printFlag=True, plotFlag=True, epochFourier=epochFourier, guardarLog=True)
+#graficar_logs(['Resultados\log_train\ADAM-Power-grad-None-2025-06-03_11-01-27.txt', 'Resultados\log_train\ADAM-Power-grad-pre-2025-06-03_10-49-35.txt'])
+
 plt.show()
